@@ -1,0 +1,3 @@
+A5: 实现 HOG + Bag of Words + SVM 的图像识别/分类示例；实现神经网络中反向传播的演示示例；实现一个 CNN 模型的训练与测试；对比不同深度的预训练 ResNet 性能；实现成桌面 app 或 web 应用，具有交互操作；提交 PDF 实验报告、prompt 文本、截图、小结、核心源码 py 文件，并列出使用的 Agent 或 LLM。
+
+使用的 Agent/LLM：Codex GPT-5
