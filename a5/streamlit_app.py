@@ -33,7 +33,14 @@ st.title("A5 图像识别与神经网络 Vibe Coding")
 st.caption("学生：裘典儿 2025213456 · Agent/LLM：Codex GPT-5")
 
 uploaded = st.sidebar.file_uploader("上传图片替换默认素材", type=["jpg", "jpeg", "png"])
-image = np.asarray(Image.open(uploaded).convert("RGB")) if uploaded else load_default_image()
+if uploaded:
+    image = np.asarray(Image.open(uploaded).convert("RGB"))
+    image_source = f"上传图片：{uploaded.name}"
+else:
+    image = load_default_image()
+    image_source = "默认图片：assets/default_image.jpg"
+
+st.sidebar.image(image, caption=image_source, use_container_width=True)
 
 tab_names = ['HOG+BOW+SVM', '反向传播', 'CNN', 'ResNet对比', '部署']
 tabs = st.tabs(tab_names)
@@ -41,6 +48,7 @@ tabs = st.tabs(tab_names)
 
 with tabs[0]:
     st.subheader("HOG + Bag of Words + SVM")
+    st.image(image, caption=image_source, use_container_width=True)
     samples = st.slider("每类样本数", 12, 45, 24, 3)
     words = st.slider("视觉词袋大小", 6, 20, 12, 2)
     result = core.bow_svm_demo(samples, words)
