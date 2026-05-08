@@ -18,7 +18,8 @@ HOG_BOW_DATASET = DATASET_ROOT / "hog_bow_dataset"
 MNIST_DATASET = DATASET_ROOT / "cnn_lenet_mnist"
 CIFAR10_DATASET = DATASET_ROOT / "resnet_cifar10_dataset"
 
-CLASSES = ["airplane", "automobile", "cat", "dog"]
+HOG_BOW_CLASSES = ["airplane", "automobile", "cat", "dog"]
+SHAPE_CLASSES = ["circle", "square", "triangle"]
 
 
 def dataset_summary() -> dict:
@@ -77,7 +78,7 @@ def make_shape_image(label: int, seed: int, size: int = 96) -> np.ndarray:
 
 def make_dataset(samples_per_class: int = 30, seed: int = 7) -> tuple[np.ndarray, np.ndarray]:
     xs, ys = [], []
-    for label in range(len(CLASSES)):
+    for label in range(len(SHAPE_CLASSES)):
         for i in range(samples_per_class):
             xs.append(make_shape_image(label, seed + i * 31))
             ys.append(label)
@@ -110,13 +111,15 @@ def patch_descriptors(image: np.ndarray, patch: int = 16, stride: int = 12) -> n
 
 def bow_svm_demo(samples_per_class: int = 30, words: int = 12, seed: int = 7) -> dict:
     if HOG_BOW_DATASET.exists():
-        train_x, train_y = load_image_folder_dataset(HOG_BOW_DATASET, "train", CLASSES, samples_per_class, 96)
-        test_x, test_y = load_image_folder_dataset(HOG_BOW_DATASET, "test", CLASSES, min(30, samples_per_class), 96)
+        class_names = HOG_BOW_CLASSES
+        train_x, train_y = load_image_folder_dataset(HOG_BOW_DATASET, "train", class_names, samples_per_class, 96)
+        test_x, test_y = load_image_folder_dataset(HOG_BOW_DATASET, "test", class_names, min(30, samples_per_class), 96)
         x = np.concatenate([train_x, test_x], axis=0)
         y = np.concatenate([train_y, test_y], axis=0)
         train_idx = np.arange(len(train_y))
         test_idx = np.arange(len(train_y), len(y))
     else:
+        class_names = SHAPE_CLASSES
         x, y = make_dataset(samples_per_class, seed)
         train_idx, test_idx = train_test_split(np.arange(len(y)), test_size=0.28, stratify=y, random_state=seed)
 
@@ -133,7 +136,18 @@ def bow_svm_demo(samples_per_class: int = 30, words: int = 12, seed: int = 7) ->
     feats = np.concatenate([bow, hog], axis=1)
     clf = LinearSVC(random_state=seed, dual="auto", max_iter=5000).fit(feats[train_idx], y[train_idx])
     pred = clf.predict(feats[test_idx])
-    return {"images": x, "labels": y, "test_idx": test_idx, "pred": pred, "accuracy": accuracy_score(y[test_idx], pred), "confusion": confusion_matrix(y[test_idx], pred), "bow": bow, "hog": hog}
+    return {
+        "images": x,
+        "labels": y,
+        "test_idx": test_idx,
+        "pred": pred,
+        "accuracy": accuracy_score(y[test_idx], pred),
+        "confusion": confusion_matrix(y[test_idx], pred),
+        "bow": bow,
+        "hog": hog,
+        "class_names": class_names,
+        "source": "local_dataset" if HOG_BOW_DATASET.exists() else "cloud_demo",
+    }
 
 
 def backprop_xor(epochs: int = 220, lr: float = 0.55, hidden: int = 4, seed: int = 5) -> dict:
@@ -175,6 +189,7 @@ def cnn_lenet_like(seed: int = 9) -> dict:
     ], dtype=np.float32)
 
     if MNIST_DATASET.exists():
+        source = "local_dataset"
         classes = [str(i) for i in range(10)]
         train_x, train_y = load_image_folder_dataset(MNIST_DATASET, "train", classes, 160, 28)
         test_x, test_y = load_image_folder_dataset(MNIST_DATASET, "test", classes, 50, 28)
@@ -183,6 +198,7 @@ def cnn_lenet_like(seed: int = 9) -> dict:
         train_idx = np.arange(len(train_y))
         test_idx = np.arange(len(train_y), len(y))
     else:
+        source = "cloud_demo"
         x, y = make_dataset(24, seed)
         train_idx, test_idx = train_test_split(np.arange(len(y)), test_size=0.3, stratify=y, random_state=seed)
 
@@ -200,7 +216,7 @@ def cnn_lenet_like(seed: int = 9) -> dict:
     pred = clf.predict(feats[test_idx])
     losses = np.exp(-np.linspace(0, 3.5, 30)) * 1.2 + 0.08
     acc = 1 - np.exp(-np.linspace(0, 3.0, 30)) * 0.55
-    return {"accuracy": accuracy_score(y[test_idx], pred), "losses": losses, "acc_curve": acc, "filters": filters}
+    return {"accuracy": accuracy_score(y[test_idx], pred), "losses": losses, "acc_curve": acc, "filters": filters, "source": source}
 
 
 def resnet_comparison() -> list[dict]:
