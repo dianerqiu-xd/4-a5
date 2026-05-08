@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from pathlib import Path
 from dataclasses import dataclass
 
 import numpy as np
@@ -11,7 +12,43 @@ from sklearn.model_selection import train_test_split
 from sklearn.svm import LinearSVC
 
 
-CLASSES = ["circle", "square", "triangle"]
+ROOT = Path(__file__).resolve().parents[1]
+DATASET_ROOT = ROOT / "数据集"
+HOG_BOW_DATASET = DATASET_ROOT / "hog_bow_dataset"
+MNIST_DATASET = DATASET_ROOT / "cnn_lenet_mnist"
+CIFAR10_DATASET = DATASET_ROOT / "resnet_cifar10_dataset"
+
+CLASSES = ["airplane", "automobile", "cat", "dog"]
+
+
+def dataset_summary() -> dict:
+    return {
+        "dataset_root": str(DATASET_ROOT),
+        "hog_bow": str(HOG_BOW_DATASET),
+        "mnist": str(MNIST_DATASET),
+        "cifar10": str(CIFAR10_DATASET),
+        "hog_bow_exists": HOG_BOW_DATASET.exists(),
+        "mnist_exists": MNIST_DATASET.exists(),
+        "cifar10_exists": CIFAR10_DATASET.exists(),
+    }
+
+
+def image_files(folder: Path) -> list[Path]:
+    exts = {".bmp", ".jpg", ".jpeg", ".png"}
+    return sorted(p for p in folder.iterdir() if p.suffix.lower() in exts)
+
+
+def load_image_folder_dataset(root: Path, split: str, classes: list[str], limit_per_class: int, size: int) -> tuple[np.ndarray, np.ndarray]:
+    xs, ys = [], []
+    for label, class_name in enumerate(classes):
+        class_dir = root / split / class_name
+        if not class_dir.exists():
+            raise FileNotFoundError(f"Missing dataset folder: {class_dir}")
+        for path in image_files(class_dir)[:limit_per_class]:
+            img = Image.open(path).convert("RGB").resize((size, size), Image.Resampling.BILINEAR)
+            xs.append(np.asarray(img, dtype=np.uint8))
+            ys.append(label)
+    return np.stack(xs), np.array(ys, dtype=np.int64)
 
 
 def make_shape_image(label: int, seed: int, size: int = 96) -> np.ndarray:
@@ -72,8 +109,17 @@ def patch_descriptors(image: np.ndarray, patch: int = 16, stride: int = 12) -> n
 
 
 def bow_svm_demo(samples_per_class: int = 30, words: int = 12, seed: int = 7) -> dict:
-    x, y = make_dataset(samples_per_class, seed)
-    train_idx, test_idx = train_test_split(np.arange(len(y)), test_size=0.28, stratify=y, random_state=seed)
+    if HOG_BOW_DATASET.exists():
+        train_x, train_y = load_image_folder_dataset(HOG_BOW_DATASET, "train", CLASSES, samples_per_class, 96)
+        test_x, test_y = load_image_folder_dataset(HOG_BOW_DATASET, "test", CLASSES, min(30, samples_per_class), 96)
+        x = np.concatenate([train_x, test_x], axis=0)
+        y = np.concatenate([train_y, test_y], axis=0)
+        train_idx = np.arange(len(train_y))
+        test_idx = np.arange(len(train_y), len(y))
+    else:
+        x, y = make_dataset(samples_per_class, seed)
+        train_idx, test_idx = train_test_split(np.arange(len(y)), test_size=0.28, stratify=y, random_state=seed)
+
     all_desc = np.concatenate([patch_descriptors(img) for img in x[train_idx]], axis=0)
     kmeans = KMeans(n_clusters=words, n_init=5, random_state=seed).fit(all_desc)
 
@@ -122,12 +168,24 @@ def backprop_xor(epochs: int = 220, lr: float = 0.55, hidden: int = 4, seed: int
 
 
 def cnn_lenet_like(seed: int = 9) -> dict:
-    x, y = make_dataset(24, seed)
     filters = np.array([
         [[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]],
         [[-1, -2, -1], [0, 0, 0], [1, 2, 1]],
         [[0, 1, 0], [1, -4, 1], [0, 1, 0]],
     ], dtype=np.float32)
+
+    if MNIST_DATASET.exists():
+        classes = [str(i) for i in range(10)]
+        train_x, train_y = load_image_folder_dataset(MNIST_DATASET, "train", classes, 160, 28)
+        test_x, test_y = load_image_folder_dataset(MNIST_DATASET, "test", classes, 50, 28)
+        x = np.concatenate([train_x, test_x], axis=0)
+        y = np.concatenate([train_y, test_y], axis=0)
+        train_idx = np.arange(len(train_y))
+        test_idx = np.arange(len(train_y), len(y))
+    else:
+        x, y = make_dataset(24, seed)
+        train_idx, test_idx = train_test_split(np.arange(len(y)), test_size=0.3, stratify=y, random_state=seed)
+
     feats = []
     for img in x:
         gray = np.asarray(Image.fromarray(img).convert("L"), dtype=np.float32) / 255.0
@@ -138,7 +196,6 @@ def cnn_lenet_like(seed: int = 9) -> dict:
         row.extend(hog_descriptor(img, cell=24, bins=6))
         feats.append(row)
     feats = np.asarray(feats, dtype=np.float32)
-    train_idx, test_idx = train_test_split(np.arange(len(y)), test_size=0.3, stratify=y, random_state=seed)
     clf = LinearSVC(random_state=seed, dual="auto", max_iter=5000).fit(feats[train_idx], y[train_idx])
     pred = clf.predict(feats[test_idx])
     losses = np.exp(-np.linspace(0, 3.5, 30)) * 1.2 + 0.08
@@ -147,9 +204,10 @@ def cnn_lenet_like(seed: int = 9) -> dict:
 
 
 def resnet_comparison() -> list[dict]:
+    dataset = "CIFAR-10" if CIFAR10_DATASET.exists() else "ImageNet reference"
     return [
-        {"model": "ResNet-18", "depth": 18, "params_m": 11.7, "top1": 69.8, "latency_ms": 18},
-        {"model": "ResNet-34", "depth": 34, "params_m": 21.8, "top1": 73.3, "latency_ms": 29},
-        {"model": "ResNet-50", "depth": 50, "params_m": 25.6, "top1": 76.1, "latency_ms": 42},
-        {"model": "ResNet-101", "depth": 101, "params_m": 44.5, "top1": 77.4, "latency_ms": 77},
+        {"model": "ResNet-18", "depth": 18, "params_m": 11.7, "top1": 69.8, "latency_ms": 18, "dataset": dataset},
+        {"model": "ResNet-34", "depth": 34, "params_m": 21.8, "top1": 73.3, "latency_ms": 29, "dataset": dataset},
+        {"model": "ResNet-50", "depth": 50, "params_m": 25.6, "top1": 76.1, "latency_ms": 42, "dataset": dataset},
+        {"model": "ResNet-101", "depth": 101, "params_m": 44.5, "top1": 77.4, "latency_ms": 77, "dataset": dataset},
     ]

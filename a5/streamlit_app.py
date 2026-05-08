@@ -41,6 +41,10 @@ else:
     image_source = "默认图片：assets/default_image.jpg"
 
 st.sidebar.image(image, caption=image_source, use_container_width=True)
+summary = core.dataset_summary()
+st.sidebar.divider()
+st.sidebar.caption("默认数据集目录")
+st.sidebar.code(summary["dataset_root"], language=None)
 
 tab_names = ['HOG+BOW+SVM', '反向传播', 'CNN', 'ResNet对比', '部署']
 tabs = st.tabs(tab_names)
@@ -48,6 +52,7 @@ tabs = st.tabs(tab_names)
 
 with tabs[0]:
     st.subheader("HOG + Bag of Words + SVM")
+    st.caption(f"默认读取：{summary['hog_bow']}")
     st.image(image, caption=image_source, use_container_width=True)
     samples = st.slider("每类样本数", 12, 45, 24, 3)
     words = st.slider("视觉词袋大小", 6, 20, 12, 2)
@@ -55,7 +60,7 @@ with tabs[0]:
     st.metric("测试准确率", f"{result['accuracy']*100:.1f}%")
     st.write("混淆矩阵")
     st.dataframe(result["confusion"], use_container_width=True)
-    cols = st.columns(3)
+    cols = st.columns(len(core.CLASSES))
     for i, cls in enumerate(core.CLASSES):
         idx = int(np.where(result["labels"] == i)[0][0])
         cols[i].image(result["images"][idx], caption=cls, use_container_width=True)
@@ -70,6 +75,7 @@ with tabs[1]:
 
 with tabs[2]:
     st.subheader("LeNet 风格 CNN 训练与测试")
+    st.caption(f"默认读取：{summary['mnist']}")
     cnn = core.cnn_lenet_like()
     st.metric("测试准确率", f"{cnn['accuracy']*100:.1f}%")
     st.line_chart({"loss": cnn["losses"], "accuracy": cnn["acc_curve"]})
@@ -77,6 +83,7 @@ with tabs[2]:
 
 with tabs[3]:
     st.subheader("ResNet 深度性能对比")
+    st.caption(f"默认读取：{summary['cifar10']}")
     rows = core.resnet_comparison()
     st.dataframe(rows, use_container_width=True)
     st.bar_chart({r["model"]: r["top1"] for r in rows})
@@ -87,3 +94,4 @@ with tabs[-1]:
     st.write("上传本文件夹到 GitHub 后，如果把该文件夹作为仓库根目录，Streamlit Cloud 的 Main file path 填 `streamlit_app.py`。")
     st.write("如果上传整个周四作业目录，则 Main file path 填 `a5/streamlit_app.py`。")
     st.write("本应用保留上传控件，可用自己的图片替换默认素材。")
+    st.write("默认数据集统一放在 `a5/数据集/` 下；如需替换数据集，保持 `train/类别名` 与 `test/类别名` 结构即可。")
