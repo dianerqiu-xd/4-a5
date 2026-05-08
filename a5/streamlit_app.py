@@ -29,19 +29,34 @@ def show_array(arr, caption: str):
     st.image(np.asarray(arr), caption=caption, use_container_width=True)
 
 
+def get_dataset_summary() -> dict:
+    fallback = {
+        "dataset_root": str(ROOT / "数据集"),
+        "hog_bow": str(ROOT / "数据集" / "hog_bow_dataset"),
+        "mnist": str(ROOT / "数据集" / "cnn_lenet_mnist"),
+        "cifar10": str(ROOT / "数据集" / "resnet_cifar10_dataset"),
+        "hog_bow_exists": (ROOT / "数据集" / "hog_bow_dataset").exists(),
+        "mnist_exists": (ROOT / "数据集" / "cnn_lenet_mnist").exists(),
+        "cifar10_exists": (ROOT / "数据集" / "resnet_cifar10_dataset").exists(),
+    }
+    if hasattr(core, "dataset_summary"):
+        return core.dataset_summary()
+    return fallback
+
+
 st.title("A5 图像识别与神经网络 Vibe Coding")
 st.caption("学生：裘典儿 2025213456 · Agent/LLM：Codex GPT-5")
 
-uploaded = st.sidebar.file_uploader("上传图片替换默认素材", type=["jpg", "jpeg", "png"])
+uploaded = st.sidebar.file_uploader("上传单张图片替换侧边栏展示图", type=["jpg", "jpeg", "png"])
 if uploaded:
     image = np.asarray(Image.open(uploaded).convert("RGB"))
     image_source = f"上传图片：{uploaded.name}"
 else:
     image = load_default_image()
-    image_source = "默认图片：assets/default_image.jpg"
+    image_source = "侧边栏默认展示图：assets/default_image.jpg"
 
 st.sidebar.image(image, caption=image_source, use_container_width=True)
-summary = core.dataset_summary()
+summary = get_dataset_summary()
 st.sidebar.divider()
 st.sidebar.caption("默认数据集目录")
 st.sidebar.code(summary["dataset_root"], language=None)
@@ -66,8 +81,9 @@ with tabs[0]:
     st.metric("测试准确率", f"{result['accuracy']*100:.1f}%")
     st.write("混淆矩阵")
     st.dataframe(result["confusion"], use_container_width=True)
-    cols = st.columns(len(result["class_names"]))
-    for i, cls in enumerate(result["class_names"]):
+    class_names = result.get("class_names", getattr(core, "CLASSES", ["circle", "square", "triangle"]))
+    cols = st.columns(len(class_names))
+    for i, cls in enumerate(class_names):
         idx = int(np.where(result["labels"] == i)[0][0])
         cols[i].image(result["images"][idx], caption=cls, use_container_width=True)
 
@@ -103,6 +119,6 @@ with tabs[-1]:
     st.subheader("部署说明")
     st.write("上传本文件夹到 GitHub 后，如果把该文件夹作为仓库根目录，Streamlit Cloud 的 Main file path 填 `streamlit_app.py`。")
     st.write("如果上传整个周四作业目录，则 Main file path 填 `a5/streamlit_app.py`。")
-    st.write("本应用保留上传控件，可用自己的图片替换默认素材。")
+    st.write("左侧上传控件只用于替换单张展示图，不等同于训练数据集。")
     st.write("默认数据集统一放在 `a5/数据集/` 下；如需替换数据集，保持 `train/类别名` 与 `test/类别名` 结构即可。")
     st.write("生成公网 URL 时无需上传 `数据集/` 和 `raw/`，云端会自动进入展示模式；本地运行时检测到完整数据集后会优先使用真实数据。")
