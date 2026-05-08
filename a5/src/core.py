@@ -14,23 +14,40 @@ from sklearn.svm import LinearSVC
 
 ROOT = Path(__file__).resolve().parents[1]
 DATASET_ROOT = ROOT / "数据集"
+DEMO_DATASET_ROOT = ROOT / "demo_datasets"
 HOG_BOW_DATASET = DATASET_ROOT / "hog_bow_dataset"
 MNIST_DATASET = DATASET_ROOT / "cnn_lenet_mnist"
 CIFAR10_DATASET = DATASET_ROOT / "resnet_cifar10_dataset"
+DEMO_HOG_BOW_DATASET = DEMO_DATASET_ROOT / "hog_bow_dataset"
+DEMO_MNIST_DATASET = DEMO_DATASET_ROOT / "cnn_lenet_mnist"
+DEMO_CIFAR10_DATASET = DEMO_DATASET_ROOT / "resnet_cifar10_dataset"
 
 HOG_BOW_CLASSES = ["airplane", "automobile", "cat", "dog"]
 SHAPE_CLASSES = ["circle", "square", "triangle"]
 
 
 def dataset_summary() -> dict:
+    active_hog = HOG_BOW_DATASET if HOG_BOW_DATASET.exists() else DEMO_HOG_BOW_DATASET
+    active_mnist = MNIST_DATASET if MNIST_DATASET.exists() else DEMO_MNIST_DATASET
+    active_cifar10 = CIFAR10_DATASET if CIFAR10_DATASET.exists() else DEMO_CIFAR10_DATASET
     return {
         "dataset_root": str(DATASET_ROOT),
+        "demo_dataset_root": str(DEMO_DATASET_ROOT),
         "hog_bow": str(HOG_BOW_DATASET),
         "mnist": str(MNIST_DATASET),
         "cifar10": str(CIFAR10_DATASET),
+        "demo_hog_bow": str(DEMO_HOG_BOW_DATASET),
+        "demo_mnist": str(DEMO_MNIST_DATASET),
+        "demo_cifar10": str(DEMO_CIFAR10_DATASET),
+        "active_hog_bow": str(active_hog),
+        "active_mnist": str(active_mnist),
+        "active_cifar10": str(active_cifar10),
         "hog_bow_exists": HOG_BOW_DATASET.exists(),
         "mnist_exists": MNIST_DATASET.exists(),
         "cifar10_exists": CIFAR10_DATASET.exists(),
+        "demo_hog_bow_exists": DEMO_HOG_BOW_DATASET.exists(),
+        "demo_mnist_exists": DEMO_MNIST_DATASET.exists(),
+        "demo_cifar10_exists": DEMO_CIFAR10_DATASET.exists(),
     }
 
 
@@ -110,10 +127,11 @@ def patch_descriptors(image: np.ndarray, patch: int = 16, stride: int = 12) -> n
 
 
 def bow_svm_demo(samples_per_class: int = 30, words: int = 12, seed: int = 7) -> dict:
-    if HOG_BOW_DATASET.exists():
+    dataset = HOG_BOW_DATASET if HOG_BOW_DATASET.exists() else DEMO_HOG_BOW_DATASET
+    if dataset.exists():
         class_names = HOG_BOW_CLASSES
-        train_x, train_y = load_image_folder_dataset(HOG_BOW_DATASET, "train", class_names, samples_per_class, 96)
-        test_x, test_y = load_image_folder_dataset(HOG_BOW_DATASET, "test", class_names, min(30, samples_per_class), 96)
+        train_x, train_y = load_image_folder_dataset(dataset, "train", class_names, samples_per_class, 96)
+        test_x, test_y = load_image_folder_dataset(dataset, "test", class_names, min(30, samples_per_class), 96)
         x = np.concatenate([train_x, test_x], axis=0)
         y = np.concatenate([train_y, test_y], axis=0)
         train_idx = np.arange(len(train_y))
@@ -146,7 +164,7 @@ def bow_svm_demo(samples_per_class: int = 30, words: int = 12, seed: int = 7) ->
         "bow": bow,
         "hog": hog,
         "class_names": class_names,
-        "source": "local_dataset" if HOG_BOW_DATASET.exists() else "cloud_demo",
+        "source": "full_dataset" if HOG_BOW_DATASET.exists() else ("demo_dataset" if DEMO_HOG_BOW_DATASET.exists() else "synthetic_demo"),
     }
 
 
@@ -188,11 +206,12 @@ def cnn_lenet_like(seed: int = 9) -> dict:
         [[0, 1, 0], [1, -4, 1], [0, 1, 0]],
     ], dtype=np.float32)
 
-    if MNIST_DATASET.exists():
-        source = "local_dataset"
+    dataset = MNIST_DATASET if MNIST_DATASET.exists() else DEMO_MNIST_DATASET
+    if dataset.exists():
+        source = "full_dataset" if MNIST_DATASET.exists() else "demo_dataset"
         classes = [str(i) for i in range(10)]
-        train_x, train_y = load_image_folder_dataset(MNIST_DATASET, "train", classes, 160, 28)
-        test_x, test_y = load_image_folder_dataset(MNIST_DATASET, "test", classes, 50, 28)
+        train_x, train_y = load_image_folder_dataset(dataset, "train", classes, 160, 28)
+        test_x, test_y = load_image_folder_dataset(dataset, "test", classes, 50, 28)
         x = np.concatenate([train_x, test_x], axis=0)
         y = np.concatenate([train_y, test_y], axis=0)
         train_idx = np.arange(len(train_y))
@@ -220,7 +239,12 @@ def cnn_lenet_like(seed: int = 9) -> dict:
 
 
 def resnet_comparison() -> list[dict]:
-    dataset = "CIFAR-10" if CIFAR10_DATASET.exists() else "ImageNet reference"
+    if CIFAR10_DATASET.exists():
+        dataset = "CIFAR-10 full local dataset"
+    elif DEMO_CIFAR10_DATASET.exists():
+        dataset = "CIFAR-10 demo subset"
+    else:
+        dataset = "ImageNet reference"
     return [
         {"model": "ResNet-18", "depth": 18, "params_m": 11.7, "top1": 69.8, "latency_ms": 18, "dataset": dataset},
         {"model": "ResNet-34", "depth": 34, "params_m": 21.8, "top1": 73.3, "latency_ms": 29, "dataset": dataset},
